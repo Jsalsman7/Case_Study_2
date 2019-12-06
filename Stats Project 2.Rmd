@@ -1,0 +1,282 @@
+---
+title: "Project 2"
+author: "Jordan Salsman"
+date: "12/4/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read the Data in  
+#### dplyr for base functions  
+#### corrplot for correlation plot, ggplot for other graphs  
+#### class for KNN and e1071 for confusion matrix  
+#### caret also classification and glmnet for models  
+#### randomForest for Random Forests  
+```{r}
+CS2 <- read.csv("/Users/jordansalsman/Desktop/CaseStudy2-data.csv")
+Pred_Salary <- read.csv("/Users/jordansalsman/Desktop/CaseStudy2CompSet No Salary.csv")
+Pred_Attrition <- read.csv("/Users/jordansalsman/Desktop/Attrition.csv")
+library(dplyr)
+library(corrplot)
+library(ggplot2)
+library(class)
+library(e1071)
+library(caret)
+library(glmnet)
+library(randomForest)
+```
+
+
+# Correlation Plot of the numeric categories in the Employment Data  
+### EmployeeCount, StandardHours, and Over18 are all left out because they are the same value in every instance. ID and EmployeeNumber are also left out because they were randomly assigned to the employees and have no influence on anything else.  
+#### Attrition is 0 for "No" and 1 for "Yes"
+#### Overtime is 0 for "No" and 1 for "Yes"  
+#### Gender is 0 for "Female" and 1 for "Male"  
+#### BusinessTravel is ordinal so 0 is for "Non_Travel", 1 is for "Rarely_Travel", 2 is for "Frequently_Travel"  
+#### res is hashtagged out for HTML ouptut purposes
+
+```{r}
+new_CS2 <- CS2 %>% select(-starts_with("EmployeeCount"))%>% select(-starts_with("StandardHours"))%>% select(-starts_with("ID")) %>% select(-starts_with("Over18")) %>% select(-starts_with("EmployeeNumber")) %>% select(-starts_with("Department"))%>% select(-starts_with("EducationField"))%>% select(-starts_with("JobRole")) %>% select(-starts_with("MaritalStatus"))
+new_CS2$Attrition <- factor(new_CS2$Attrition) %>% as.numeric(new_CS2$Attrition)
+new_CS2$Attrition <- ifelse(new_CS2$Attrition==1,0,1)
+new_CS2$OverTime<- factor(new_CS2$OverTime) %>% as.numeric(new_CS2$OverTime)
+new_CS2$OverTime <- ifelse(new_CS2$OverTime==1,0,1)
+new_CS2$Gender <- factor(new_CS2$Gender) %>% as.numeric(new_CS2$Gender)
+new_CS2$Gender <- ifelse(new_CS2$Gender==1,0,1)
+new_CS2$BusinessTravel <- factor(new_CS2$BusinessTravel) %>% as.numeric(new_CS2$BusinessTravel)
+new_CS2$BusinessTravel[new_CS2$BusinessTravel == 1] <- 0
+new_CS2$BusinessTravel[new_CS2$BusinessTravel == 3] <- 1
+res <-cor(new_CS2)
+corrplot(res, type = "upper", method = "shade" ,order = "hclust", tl.col = "black", tl.srt = 45, tl.cex =.50)
+#res
+```
+
+
+## Tables of Categorical Variables on the Response Attrition  
+```{r}
+with(CS2, table(MaritalStatus, Attrition))
+with(CS2, table(JobRole, Attrition))
+with(CS2, table(Department, Attrition))
+with(CS2, table(EducationField, Attrition))
+```
+
+# Further Adjusting The Data
+```{r}
+new_CS2 <- CS2 %>% select(-starts_with("EmployeeCount"))%>% select(-starts_with("StandardHours"))%>% select(-starts_with("ID")) %>% select(-starts_with("Over18")) %>% select(-starts_with("EmployeeNumber"))
+
+new_CS2$OverTime<- factor(new_CS2$OverTime) %>% as.numeric(new_CS2$OverTime)
+new_CS2$OverTime <- ifelse(new_CS2$OverTime==1,0,1)
+new_CS2$Gender <- factor(new_CS2$Gender) %>% as.numeric(new_CS2$Gender)
+new_CS2$Gender <- ifelse(new_CS2$Gender==1,0,1)
+new_CS2$BusinessTravel <- factor(new_CS2$BusinessTravel) %>% as.numeric(new_CS2$BusinessTravel)
+new_CS2$BusinessTravel[new_CS2$BusinessTravel == 1] <- 0
+new_CS2$BusinessTravel[new_CS2$BusinessTravel == 3] <- 1
+```
+
+## Do Sales Reps or Single people work more Overtime?
+```{r}
+jr <- CS2 %>% select(-starts_with("EmployeeCount"))%>% select(-starts_with("StandardHours"))%>% select(-starts_with("ID")) %>% select(-starts_with("Over18")) %>% select(-starts_with("EmployeeNumber")) %>% select(-starts_with("Department"))%>% select(-starts_with("EducationField")) 
+jr$Attrition <- factor(jr$Attrition) %>% as.numeric(jr$Attrition)
+jr$Attrition <- ifelse(jr$Attrition==1,0,1)
+jr$OverTime<- factor(jr$OverTime) %>% as.numeric(jr$OverTime)
+jr$OverTime <- ifelse(jr$OverTime==1,0,1)
+jr$Gender <- factor(jr$Gender) %>% as.numeric(jr$Gender)
+jr$Gender <- ifelse(jr$Gender==1,0,1)
+jr$BusinessTravel <- factor(jr$BusinessTravel) %>% as.numeric(jr$BusinessTravel)
+jr$BusinessTravel[jr$BusinessTravel == 1] <- 0
+jr$BusinessTravel[jr$BusinessTravel == 3] <- 1
+jr$JobRole <- factor(jr$JobRole) %>% as.numeric(jr$JobRole)
+jr$JobRole[jr$JobRole == 1] <- 0
+jr$JobRole[jr$JobRole == 2] <- 0
+jr$JobRole[jr$JobRole == 3] <- 0
+jr$JobRole[jr$JobRole == 4] <- 0
+jr$JobRole[jr$JobRole == 5] <- 0
+jr$JobRole[jr$JobRole == 6] <- 0
+jr$JobRole[jr$JobRole == 7] <- 0
+jr$JobRole[jr$JobRole == 8] <- 0
+jr$JobRole[jr$JobRole == 9] <- 1
+jr$MaritalStatus <- factor(jr$MaritalStatus) %>% as.numeric(jr$MaritalStatus)
+jr$MaritalStatus[jr$MaritalStatus == 1] <- 0
+jr$MaritalStatus[jr$MaritalStatus == 2] <- 0
+jr$MaritalStatus[jr$MaritalStatus == 3] <- 1
+
+cor(jr)
+```
+### It appears that single people and sales reps are younger  
+
+### ScatterPlot of Stock Option Vs. Monthly Income
+
+```{r}
+p <- jr %>% ggplot(aes(x = StockOptionLevel, y= MonthlyIncome, color = as.factor(MaritalStatus))) + geom_point() + ggtitle("Stock Options Vs Monthly Income") + xlab("Stock Option Level") + ylab("Monthly Income")
+p + scale_color_discrete(name="Been Married Vs Single", labels = c("Been Married","Single"))
+```
+
+
+
+## Lasso Regression to Find Variable importance   
+```{r}
+x <- model.matrix(Attrition~.,-1, data = new_CS2)
+y <- as.numeric(new_CS2$Attrition)
+fit.lasso = glmnet(x,y, lambda =  .06)
+coef(fit.lasso)
+```
+#### OverTime, Single, SalesRep, and JobInvolvement are all still in the equation after a harsh lasso penalty  
+
+
+## Boxplot of Number of Companies by Job Role  
+```{r}
+p <- new_CS2 %>% ggplot(aes(x=JobRole, y=NumCompaniesWorked, fill = JobRole)) + geom_boxplot() + ggtitle("Number of Companies Worked by Job Role") + ylab("Number of Companies") + xlab("Job Role")
+p+ theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust = 0))
+```
+
+
+
+# Naive Bayes Classifier Attempt  
+### Can obtain good sensitivity and specificity but not consistently, it depends on the random seed  
+### Therefore this model is not trustworthy
+
+```{r}
+iterations = 100
+AccHolder = numeric(100)
+SensHolder = numeric(100)
+SpecHolder = numeric(100)
+for(seed in 1:iterations)
+{
+  set.seed(seed)
+    Indices = sample(seq(1:length(CS2$Age)),round(.75*length(CS2$Age)))
+    train = CS2[Indices,]
+    test = CS2[-Indices,]
+    model = naiveBayes(train[,c("OverTime", "JobInvolvement", "Age" )],factor(train$Attrition, labels= c("Yes", "No")))
+    CM = confusionMatrix(table(factor(test$Attrition, labels = c("Yes",   "No")),predict(model,test[,c("OverTime", "JobInvolvement", "Age")])))
+    AccHolder[seed] = CM$overall[1]
+    SensHolder[seed] = CM$byClass[1]
+    SpecHolder[seed] = CM$byClass[2]
+}
+mean(AccHolder)
+mean(SensHolder)
+mean(SpecHolder)
+which.max(AccHolder)
+which.max(SensHolder)
+seed.1 <- which.max(SpecHolder)
+
+set.seed(seed.1)
+Indices = sample(seq(1:length(CS2$Attrition)),round(.75*length(CS2$Attrition)))
+train = CS2[Indices,]
+test = CS2[-Indices,]
+model = naiveBayes(train[,c("OverTime", "JobInvolvement", "Age")],factor(train$Attrition, labels= c("Yes", "No")))
+    CM = confusionMatrix(table(factor(test$Attrition, labels = c("Yes",   "No")),predict(model,test[,c("OverTime", "JobInvolvement", "Age")])))
+CM
+```
+
+
+# KNN Attempt  
+### Cannot get a high Specificity no matter the model or k's  
+### Decent Prediction accuracy but terrible specificity, this model is not good.
+```{r}
+k = 30
+Acc_holder = matrix(nrow = iterations, ncol = k)
+spec_holder = data.frame(nrow=1)
+for(j in 1:iterations)
+{
+set.seed(j)
+smp<- floor(0.75 * nrow(new_CS2))
+train_ind <- sample(seq_len(nrow(new_CS2)), size = smp)
+imputed_train <- new_CS2[train_ind, ]
+imputed_test <- new_CS2[-train_ind, ]
+  for(i in 1:k)
+  {
+  classifications <- knn(imputed_train[,c(1,20,22)], imputed_test[,c(1,20,22)], imputed_train$Attrition,     prob = TRUE, k = i)
+  CM <- confusionMatrix(table(classifications, imputed_test$Attrition))
+    Acc_holder[j,i] = CM$overall[1]
+    spec_holder[i] = CM$byClass[2]
+  }
+}
+MeanAcc = colMeans(Acc_holder)
+which.max(MeanAcc)
+new_k <- which.max(spec_holder)
+k <- c(1:30)
+Mean_Acc_df <- data_frame(MeanAcc)
+Mean_Acc_df <- cbind(k, Mean_Acc_df)
+Mean_Acc_df %>% ggplot(aes(x = k, y= MeanAcc)) +
+               geom_line(color = "blue", alpha = .8) +
+               labs(title="Cross-Validating Different KNN Models", 
+               caption="KNN Score Across K's") + 
+               xlab("K's")+
+               ylab("Prediction Accuracy")
+classifications <- knn(imputed_train[,c(1,20,22)], imputed_test[,c(1,20,22)], imputed_train$Attrition,     prob = TRUE, k = new_k )
+CM <- confusionMatrix(table(classifications, imputed_test$Attrition))
+CM
+```
+
+
+
+
+# Random Forest Classifier  
+### This was able to work out much better for both Sensitivity and Specificity
+```{r, error = TRUE}
+set.seed(7)
+ah <- new_CS2 %>% filter(Attrition==1)
+bah <- new_CS2 %>% filter(Attrition==0)
+ind = sample(2, nrow(bah), replace=TRUE, prob=c(0.78,0.22))
+bah = bah[ind==2,]
+RF_df <- rbind(ah,bah)
+RF_df$Attrition <- as.factor(RF_df$Attrition)
+set.seed(7)
+ind = sample(2, nrow(RF_df), replace=TRUE, prob=c(0.75,0.25))
+trainData = RF_df[ind==1,]
+testData = RF_df[ind==2,]
+RF_Error_Rate = randomForest(Attrition~., data=RF_df, ntree=190, mtry = 5,proximity=T)
+CS2Pred = predict(RF_Error_Rate, newdata=testData)
+RF_Error_Rate
+plot(RF_Error_Rate)
+```
+
+
+#### Get prediction set matched up to train set
+```{r}
+Pred_Attrition <- CS2 %>% select(-starts_with("EmployeeCount"))%>% select(-starts_with("StandardHours"))%>% select(-starts_with("ID")) %>% select(-starts_with("Over18")) %>% select(-starts_with("EmployeeNumber"))
+Pred_Attrition$OverTime<- factor(Pred_Attrition$OverTime) %>% as.numeric(Pred_Attrition$OverTime)
+Pred_Attrition$OverTime <- ifelse(Pred_Attrition$OverTime==1,0,1)
+Pred_Attrition$Gender <- factor(Pred_Attrition$Gender) %>% as.numeric(Pred_Attrition$Gender)
+Pred_Attrition$Gender <- ifelse(Pred_Attrition$Gender==1,0,1)
+Pred_Attrition$BusinessTravel <- factor(Pred_Attrition$BusinessTravel) %>% as.numeric(Pred_Attrition$BusinessTravel)
+Pred_Attrition$BusinessTravel[Pred_Attrition$BusinessTravel == 1] <- 0
+Pred_Attrition$BusinessTravel[Pred_Attrition$BusinessTravel == 3] <- 1
+```
+
+
+## Predicting Attrition using RF Model
+```{r error = TRUE}
+pred <- predict(RF_Error_Rate, Pred_Attrition)
+pred <- data.frame(pred)
+write.csv(pred,"Case2PredictionsSalsman Attrition.csv" )
+```
+
+
+### Finding Best Model and measuring RMSE with Test and Training  
+#### Step-wise is hashtagged out for HTML
+```{r}
+set.seed(7)
+ind = sample(2, nrow(new_CS2), replace=TRUE, prob=c(0.75,0.25))
+trainData = new_CS2[ind==1,]
+testData = new_CS2[ind==2,]
+#m <- step(lm(MonthlyIncome ~., data = trainData), direction= "both")
+new_model <- lm(formula = MonthlyIncome ~ DailyRate + DistanceFromHome + JobInvolvement + JobLevel + JobRole + TotalWorkingYears + YearsSinceLastPromotion, data = trainData)
+summary(new_model)
+pred <- predict(new_model, testData)
+RMSE(pred, testData$MonthlyIncome)
+```
+
+
+### Building Best Model with Full Data that is not split
+```{r}
+new_model <- lm(formula = MonthlyIncome ~ DailyRate + DistanceFromHome + JobInvolvement + JobLevel + JobRole + TotalWorkingYears + YearsSinceLastPromotion, data = new_CS2)
+pred <- predict(new_model, Pred_Salary)
+pred <- data.frame(pred)
+write.csv(pred, "Case2PredictionsSalsman Salary.csv")
+```
+
+
